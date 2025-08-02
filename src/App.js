@@ -93,7 +93,6 @@ export default function App() {
           if (data.Response === "False")
             throw new Error("Could not find movie");
           setMovies(data.Search);
-          console.log(data.Search);
         } catch (err) {
           console.error(err.message); // "err.message" where err is the error caught and message is the custom message written
           setError(err.message); // sets the custom error message to be displayed
@@ -302,6 +301,18 @@ function MovieDetails({ selectedId, onCloseMovie, onAddWatched, watched }) {
     }
     getMovieDetails();
   }, []);
+
+  useEffect(
+    function () {
+      if (!title) return;
+      document.title = `Movie | ${title}`;
+
+      return function () {
+        document.title = "usePopcorn";
+      };
+    },
+    [title]
+  );
   return (
     <div className="details">
       {isLoading ? (
