@@ -50,7 +50,7 @@ const tempWatchedData = [
 const average = (arr) =>
   arr.reduce((acc, cur, i, arr) => acc + cur / arr.length, 0);
 
-const Key = "f54f7416";
+const KEY = "f54f7416";
 
 export default function App() {
   const [movies, setMovies] = useState([]);
@@ -59,8 +59,6 @@ export default function App() {
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(null);
-
-  // const tempQuery = "Ballerina";
 
   function handleSelectMovie(id) {
     setSelectedId((selectedId) => (id === selectedId ? null : id));
@@ -73,18 +71,20 @@ export default function App() {
   function handleAddWatched(movie) {
     setWatched((watched) => [...watched, movie]);
   }
-  function hanldeDeleteWatched(id) {
+  function handleDeleteWatched(id) {
     setWatched((watched) => watched.filter((movie) => movie.imdbID !== id));
   }
 
   useEffect(
     function () {
+      const controller = new AbortController();
       async function fetchMovies() {
         try {
           setIsLoading(true);
           setError("");
           const res = await fetch(
-            `http://www.omdbapi.com/?apikey=${Key}&s=${query}`
+            `http://www.omdbapi.com/?apikey=${KEY}&s=${query}`,
+            { signal: controller.signal }
           );
           if (!res.ok)
             throw new Error("Something went wrong while fetching movies");
@@ -93,9 +93,12 @@ export default function App() {
           if (data.Response === "False")
             throw new Error("Could not find movie");
           setMovies(data.Search);
+          setError("");
         } catch (err) {
-          console.error(err.message); // "err.message" where err is the error caught and message is the custom message written
-          setError(err.message); // sets the custom error message to be displayed
+          if (err.name !== "AbortError") {
+            console.error(err.message); // "err.message" where err is the error caught and message is the custom message written
+            setError(err.message); // sets the custom error message to be displayed
+          }
         } finally {
           // "finally" block runs whatever code in it last
           setIsLoading(false);
@@ -108,7 +111,12 @@ export default function App() {
         setError("");
         return;
       }
+      handleCloseMovie();
       fetchMovies();
+      // Clean up function that aborts abandoned fetch requests. in this case "Keystrokes"
+      return function () {
+        controller.abort();
+      };
     },
     [query]
   );
@@ -141,7 +149,7 @@ export default function App() {
               <WatchedSummary watched={watched} />
               <WatchedMoviesList
                 watched={watched}
-                onDeleteWatched={hanldeDeleteWatched}
+                onDeleteWatched={handleDeleteWatched}
               />
             </>
           )}
@@ -195,7 +203,7 @@ function Search({ query, setQuery }) {
 function Numresults({ movies }) {
   return (
     <p className="num-results">
-      {/* Found <strong>{movies.length}</strong> results */}
+      Found <strong>{movies?.length || 0}</strong> results
     </p>
   );
 }
@@ -289,15 +297,38 @@ function MovieDetails({ selectedId, onCloseMovie, onAddWatched, watched }) {
     onAddWatched(newWatchedMovie);
     onCloseMovie();
   }
+
+  useEffect(
+    function () {
+      function callback(e) {
+        if (e.code === "Escape") {
+          onCloseMovie();
+        }
+      }
+      document.addEventListener("keydown", callback);
+      return function () {
+        document.removeEventListener("keydown", callback);
+      };
+    },
+    [onCloseMovie]
+  );
   useEffect(function () {
+    const controller = new AbortController();
+
     async function getMovieDetails() {
-      setIsLoading(true);
-      const res = await fetch(
-        `http://www.omdbapi.com/?apikey=${Key}&i=${selectedId}`
-      );
-      const data = await res.json();
-      setMovie(data);
-      setIsLoading(false);
+      try {
+        setIsLoading(true);
+        const res = await fetch(
+          `http://www.omdbapi.com/?apikey=${KEY}&i=${selectedId}`,
+          { signal: controller.signal }
+        );
+        const data = await res.json();
+        setMovie(data);
+      } catch (err) {
+        if (err.name !== "AbortError") console.error(err.message);
+      } finally {
+        setIsLoading(false);
+      }
     }
     getMovieDetails();
   }, []);
