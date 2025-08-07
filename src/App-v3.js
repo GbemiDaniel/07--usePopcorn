@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import StarRating from "./StarRating";
 import { useMovies } from "./useMovies";
 import { useLocalStorageState } from "./useLocalStorageState";
-import { useKeyPress } from "./useKey";
 
 const average = (arr) =>
   arr.reduce((acc, cur, i, arr) => acc + cur / arr.length, 0);
@@ -100,11 +99,22 @@ function Logo() {
 function Search({ query, setQuery }) {
   const inputEl = useRef(null);
 
-  useKeyPress("Enter", function () {
-    if (document.activeElement === inputEl.current) return;
-    inputEl.current.focus();
-    setQuery("");
-  });
+  useEffect(
+    function () {
+      function callback(e) {
+        if (document.activeElement === inputEl.current) return;
+
+        if (e.code === "Enter") {
+          inputEl.current.focus();
+          setQuery("");
+        }
+      }
+      document.addEventListener("keydown", callback);
+
+      return () => document.addEventListener("keydown", callback); //Cleanup function for ma
+    },
+    [setQuery]
+  );
   return (
     <input
       className="search"
@@ -225,31 +235,40 @@ function MovieDetails({ selectedId, onCloseMovie, onAddWatched, watched }) {
     onCloseMovie();
   }
 
-  useKeyPress("Escape", onCloseMovie);
-
   useEffect(
     function () {
-      const controller = new AbortController();
-
-      async function getMovieDetails() {
-        try {
-          setIsLoading(true);
-          const res = await fetch(
-            `http://www.omdbapi.com/?apikey=${KEY}&i=${selectedId}`,
-            { signal: controller.signal }
-          );
-          const data = await res.json();
-          setMovie(data);
-        } catch (err) {
-          if (err.name !== "AbortError") console.error(err.message);
-        } finally {
-          setIsLoading(false);
+      function callback(e) {
+        if (e.code === "Escape") {
+          onCloseMovie();
         }
       }
-      getMovieDetails();
+      document.addEventListener("keydown", callback);
+      return function () {
+        document.removeEventListener("keydown", callback);
+      };
     },
-    [selectedId]
+    [onCloseMovie]
   );
+  useEffect(function () {
+    const controller = new AbortController();
+
+    async function getMovieDetails() {
+      try {
+        setIsLoading(true);
+        const res = await fetch(
+          `http://www.omdbapi.com/?apikey=${KEY}&i=${selectedId}`,
+          { signal: controller.signal }
+        );
+        const data = await res.json();
+        setMovie(data);
+      } catch (err) {
+        if (err.name !== "AbortError") console.error(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    getMovieDetails();
+  }, []);
 
   useEffect(
     function () {
